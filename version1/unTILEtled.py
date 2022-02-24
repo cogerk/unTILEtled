@@ -28,6 +28,7 @@ player_hand = game_tiles.pull_new_hand(
 )  # Draw hand from the available game_tiles
 game_board = player_hand.build_hand_tiles_sprites(game_board)
 
+# TODO: Turn these labels into prettier images and put labels in their own module that GameBoard() accesses
 ### Load Font ###
 print(pyglet.resource.path)
 pyglet.resource.add_font("BAUHS93.TTF")
@@ -66,30 +67,12 @@ def on_draw():
     game_board.batch.draw()
 
 
-# @game_board.game_window.event
-# def on_mouse_drag(x, y, dx, dy, button, modifiers):
-#     sprite_x = (
-#         game_board.player_hand_sprites[0].x,
-#         game_board.player_hand_sprites[0].x + game_board.player_hand_sprites[0].width,
-#     )
-#     sprite_y = (
-#         game_board.player_hand_sprites[0].y,
-#         game_board.player_hand_sprites[0].y + game_board.player_hand_sprites[0].height,
-#     )
-#     if (sprite_x[0] < x < sprite_x[1]) and (sprite_y[0] < y < sprite_y[1]):
-#         game_board.player_hand_sprites[0].update(
-#             x=game_board.player_hand_sprites[0].x + dx,
-#             y=game_board.player_hand_sprites[0].y + dy,
-#         )
-#         game_board.player_hand_sprites[1].x = game_board.player_hand_sprites[1].x + dx
-#         game_board.player_hand_sprites[1].y = game_board.player_hand_sprites[1].y + dy
-
-# printing some message
-
+# List Event Handlers
 
 # Print events executed in the window (for debugging)
-# event_logger = pyglet.window.event.WindowEventLogger()
+# event_logger = pyglet.window.event.WindowEventLogger().on_mouse_drag
 # game_board.game_window.push_handlers(event_logger)
+game_board.game_window.push_handlers(game_board.player_hand_sprites[0])
 
 ### Run it ###
 if __name__ == "__main__":

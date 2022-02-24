@@ -59,9 +59,16 @@ class GameBoard:
         self.game_board_sprite.scale = board_scale
 
     def get_game_objects(self):
+        """
+        Returns a list of all sprites on the board right now
+        not sure if I need this :D
+        """
         return [self.game_board_sprite] + self.player_hand_sprites
 
     def update(self, dt):
+        """
+        Runs all sprites update() function
+        """
         self.game_board_sprite.update()
         for sprite in self.player_hand_sprites:
             sprite.update()
@@ -108,6 +115,25 @@ class GamePieceSprite(pyglet.sprite.Sprite):
         self.tile_status = game_piece_info.tile_status
         self.draggable = draggable
         super().__init__(pyglet.resource.image("None.png"), batch=batch)
+
+    def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
+        """
+        Click and Drag tiles around weeee
+        """
+        # ONLY drag if tile has "draggable" flag
+        if self.draggable:
+            # Get coordinates bounding the sprite
+            current_sprite_x_bounds = (
+                self.x,
+                self.x + self.block.width,
+            )  # have to use block width bc parent sprite is 1x1
+            current_sprite_y_bounds = (self.y, self.y + self.block.height)
+            # Did the mouse click the sprite?
+            sprite_was_clicked = (
+                current_sprite_x_bounds[0] < x < current_sprite_x_bounds[1]
+            ) and (current_sprite_y_bounds[0] < y < current_sprite_y_bounds[1])
+        if sprite_was_clicked:
+            self.update(x=self.x + dx, y=self.y + dy)
 
     def update(
         self, x=None, y=None, rotation=None, scale=None, scale_x=None, scale_y=None
