@@ -70,7 +70,6 @@ class GameBoard:
         Not sure if I need other sprites to be event handlers.
         """
         for obj in self.player_hand_sprites:
-            print(obj)
             self.game_window.push_handlers(obj)
 
 
@@ -111,18 +110,19 @@ class GamePieceSprite(pyglet.sprite.Sprite):
     """
     Empty sprite that includes both gem and block sprites as attributes,
     should be created only when spawned on the board.
+    "active" is a boolean describing whether this is an active file.
     """
 
     def __init__(
         self,
         game_piece_info: GamePiece,
         batch: pyglet.graphics.Batch(),
-        draggable: bool = True,
+        active: bool = False,
     ):
         self.block = pyglet.sprite.Sprite(game_piece_info.block, batch=batch)
         self.gem = pyglet.sprite.Sprite(game_piece_info.gem, batch=batch)
         self.tile_status = game_piece_info.tile_status
-        self.draggable = draggable
+        self.active = active
         super().__init__(pyglet.resource.image("None.png"), batch=batch)
 
     def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
