@@ -61,17 +61,26 @@ class GameBoard:
     def get_game_objects(self):
         """
         Returns a list of all sprites on the board right now
-        not sure if I need this :D
         """
         return [self.game_board_sprite] + self.player_hand_sprites
+
+    def add_event_handlers(self):
+        """
+        Add player hand sprites to event handlers
+        Not sure if I need other sprites to be event handlers.
+        """
+        for obj in self.player_hand_sprites:
+            print(obj)
+            self.game_window.push_handlers(obj)
+
 
     def update(self, dt):
         """
         Runs all sprites update() function
         """
-        self.game_board_sprite.update()
-        for sprite in self.player_hand_sprites:
-            sprite.update()
+        objs = self.get_game_objects()
+        for obj in objs:
+            obj.update()
 
 
 class TileStatus(enum.Enum):

@@ -72,7 +72,7 @@ def on_draw():
 # Print events executed in the window (for debugging)
 # event_logger = pyglet.window.event.WindowEventLogger().on_mouse_drag
 # game_board.game_window.push_handlers(event_logger)
-game_board.game_window.push_handlers(game_board.player_hand_sprites[0])
+game_board.add_event_handlers()
 
 ### Run it ###
 if __name__ == "__main__":
