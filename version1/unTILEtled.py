@@ -12,14 +12,16 @@ pyglet.font.base.Font.texture_min_filter = pyglet.gl.GL_NEAREST
 pyglet.font.base.Font.texture_mag_filter = pyglet.gl.GL_NEAREST
 pyglet.image.Texture.default_min_filter = pyglet.gl.GL_NEAREST
 pyglet.image.Texture.default_mag_filter = pyglet.gl.GL_NEAREST
-
+# TODO: Sprite class that knows if
 # TODO: Make this its own class if necessary
 ### Initialize game ###
 game_board = game.game_setup.GameBoard()
 game_tiles = game.game_setup.TilePool(game_board)
 
 ## Add Gameboard ##
+
 game_board.add_game_board_sprite()
+game_board.define_board_spaces()
 
 ### Initialize Hand And Draw First Tiles ###
 player_hand = game.game_setup.PlayerHand()
@@ -30,7 +32,6 @@ game_board = player_hand.build_hand_tiles_sprites(game_board)
 
 # TODO: Turn these labels into prettier images and put labels in their own module that GameBoard() accesses
 ### Load Font ###
-print(pyglet.resource.path)
 pyglet.resource.add_font("BAUHS93.TTF")
 
 ### Set BG color: ###
@@ -57,6 +58,7 @@ your_hand_text = pyglet.text.Label(
     font_size=24,
 )
 
+
 ### Draw it ###
 @game_board.game_window.event
 def on_draw():
@@ -68,10 +70,9 @@ def on_draw():
 
 
 # List Event Handlers
-
 # Print events executed in the window (for debugging)
-# event_logger = pyglet.window.event.WindowEventLogger().on_mouse_drag
-# game_board.game_window.push_handlers(event_logger)
+event_logger = pyglet.window.event.WindowEventLogger().on_mouse_press
+game_board.game_window.push_handlers(event_logger)
 game_board.add_event_handlers()
 
 ### Run it ###

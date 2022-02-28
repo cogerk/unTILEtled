@@ -1,7 +1,8 @@
 import enum
 import numpy as np
 import pyglet
-
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 COLORS = ["Pink", "Purple", "Indigo", "Blue", "Aqua", "Green"]
 pyglet.resource.path = ["../../resources"]
@@ -24,6 +25,53 @@ class GameAssets:
         return
 
 
+class BoardSpace(pyglet.shapes.Polygon):
+    """
+    Describes a space on the board that tiles can be placed on.
+    A diamond-shaped polygon with four coordinates, bottom, left, top, and right
+    """
+
+    def __init__(
+        self,
+        bottom: list[int],
+        width_divisons: int,
+        height_divisons: int,
+        color: tuple[int],
+        batch: pyglet.graphics.Batch,
+        visible: bool = False,
+    ):
+        # Use that to define left, right, top, coordinates, see GameBoardMath.png
+        left = [bottom[0] - width_divisons, bottom[1] + height_divisons]
+        right = [bottom[0] + width_divisons, bottom[1] + height_divisons]
+        top = [bottom[0], bottom[1] + 2 * height_divisons]
+
+        super().__init__(bottom, left, top, right, color=color, batch=batch)
+        # TODO: Is this intended behavoir?
+        self.visible = visible  # set visibility of space (probably False because shapes get drawn over sprites)
+
+        # Params for mouse over event
+        self.vertex_list = [tuple(x) for x in [bottom, left, top, right]]
+        self.width_divisions = width_divisons
+        self.height_divisions = height_divisons
+
+        # Is space selected
+        self.space_selected = False
+
+    def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
+        # Is mouse dragging over space?
+        # Use Shapely to determine if polygon contains the point
+
+        point = Point(x, y)
+        polygon = Polygon(self.vertex_list)
+        if polygon.contains(point):
+            self.space_selected = True
+        else:
+            self.space_selected = False
+
+    def on_mouse_release(self, x, y, button, modifiers):
+        self.space_selected = False
+
+
 class GameBoard:
     """
     Describes window and sprites in that window
@@ -34,10 +82,14 @@ class GameBoard:
         game_window: pyglet.window = pyglet.window.Window(800, 600),
         player_hand_sprites: list["pyglet.sprite.Sprite"] = [],
         batch: pyglet.graphics.Batch = pyglet.graphics.Batch(),
+        color: tuple = (9, 4, 10),
+        tiles_per_row: int = 6,
     ):
         self.game_window = game_window
         self.batch = batch
         self.player_hand_sprites = player_hand_sprites
+        self.color = color
+        self.tiles_per_row = tiles_per_row
 
     def add_game_board_sprite(self, board_scale: float = 2):
         """
@@ -58,6 +110,45 @@ class GameBoard:
         )
         self.game_board_sprite.scale = board_scale
 
+    # TODO: Maybe combine this and above function into a "gameboard class" and make this class a "game" class
+    def define_board_spaces(self):
+        # Game board is made up of n x n spaces that we'll treat as a cartesion plane
+        # Space coord of Bottom-est space is 0, 0
+        # Space coord of right-est space is 0, n
+        # Space coord left-ist space is n, 0
+
+        # height, width, and center point of gameboard
+        h = self.game_board_sprite.height
+        w = self.game_board_sprite.width
+        x_center = self.game_board_sprite.x
+        y_center = self.game_board_sprite.y
+
+        # Bounds of game board
+        board_bottom_coord = [x_center, y_center - h / 2]
+
+        # Divide the board into 2 n divisions to define spaces tiles can go on isometric board
+        # see GameBoardMath.png
+        s_w = w / (2 * self.tiles_per_row)
+        s_h = h / (2 * self.tiles_per_row)
+
+        # start at 0,0
+        # Loop through each square on the board
+        self.board_spaces = np.empty((6, 6), dtype=object)
+        for y_space_coord in range(6):
+            self.color = (self.color[0] + 1, self.color[1], self.color[2])
+            for x_space_coord in range(6):
+                # Place bottom coordinate depending on which space were on
+                x_space_coord = 0
+                y_space_coord = 0
+                s_b = [
+                    board_bottom_coord[0] + s_w * (x_space_coord + y_space_coord * -1),
+                    board_bottom_coord[1] + s_h * (y_space_coord + x_space_coord),
+                ]
+                self.color = (self.color[0] + 1, self.color[1], self.color[2] + 1)
+                self.board_spaces[x_space_coord, y_space_coord] = BoardSpace(
+                    s_b, s_w, s_h, color=self.color, batch=self.batch, visible=False
+                )
+
     def get_game_objects(self):
         """
         Returns a list of all sprites on the board right now
@@ -66,12 +157,13 @@ class GameBoard:
 
     def add_event_handlers(self):
         """
-        Add player hand sprites to event handlers
-        Not sure if I need other sprites to be event handlers.
+        Add player hand sprites, board spaces, to event handlers
         """
-        for obj in self.player_hand_sprites:
-            self.game_window.push_handlers(obj)
-
+        for tile in self.player_hand_sprites:
+            self.game_window.push_handlers(tile)
+        for col in self.board_spaces:
+            for space in col:
+                self.game_window.push_handlers(space)
 
     def update(self, dt):
         """
@@ -125,24 +217,32 @@ class GamePieceSprite(pyglet.sprite.Sprite):
         self.active = active
         super().__init__(pyglet.resource.image("None.png"), batch=batch)
 
+    def on_mouse_press(self, x, y, button, modifier):
+        # Get coordinates bounding the sprite
+        current_sprite_x_bounds = (
+            self.x,
+            self.x + self.block.width,
+        )  # have to use block width bc parent sprite is 1x1
+        current_sprite_y_bounds = (self.y, self.y + self.block.height)
+        # Did the mouse click the sprite?
+        self.active = (
+            current_sprite_x_bounds[0] < x < current_sprite_x_bounds[1]
+        ) and (current_sprite_y_bounds[0] < y < current_sprite_y_bounds[1])
+        if self.active:
+            self.update(scale=self.scale * 2)
+
+    def on_mouse_release(self, x, y, button, modifier):
+        if self.active:
+            self.active = False
+            self.update(scale=self.scale / 2)
+
     def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
         """
         Click and Drag tiles around weeee
         """
-        # ONLY drag if tile has "draggable" flag
-        if self.draggable:
-            # Get coordinates bounding the sprite
-            current_sprite_x_bounds = (
-                self.x,
-                self.x + self.block.width,
-            )  # have to use block width bc parent sprite is 1x1
-            current_sprite_y_bounds = (self.y, self.y + self.block.height)
-            # Did the mouse click the sprite?
-            sprite_was_clicked = (
-                current_sprite_x_bounds[0] < x < current_sprite_x_bounds[1]
-            ) and (current_sprite_y_bounds[0] < y < current_sprite_y_bounds[1])
-        if sprite_was_clicked:
-            self.update(x=self.x + dx, y=self.y + dy)
+        # Only drag if sprite is active
+        if self.active:
+            self.update(x=self.x + dx, y=y + dy)
 
     def update(
         self, x=None, y=None, rotation=None, scale=None, scale_x=None, scale_y=None
@@ -196,7 +296,9 @@ class PlayerHand:
             x = (idx % 3 * self.spacer) + hand_x
             y = (idx % 2 * self.spacer) + hand_y
             # Place block and gem for one tile in two sprites with some coordinates
-            game_piece_sprite = GamePieceSprite(tile, game_board.batch, draggable=True)
+            game_piece_sprite = GamePieceSprite(
+                tile, batch=game_board.batch, active=True
+            )
             # Scale accordingly
             game_piece_sprite.update(x=x, y=y, scale=self.hand_scale)
 

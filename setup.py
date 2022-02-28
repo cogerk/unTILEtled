@@ -10,7 +10,7 @@ setup(
         "pyglet==1.5.21",
         "setuptools==60.6.0",
         "wheel==0.37.1",
-        "black==22.1.0",
+        "Shapely==1.8.1.post1",
     ],
     # extras_require={
     #    'interactive': ['matplotlib>=2.2.0,, 'jupyter'],
