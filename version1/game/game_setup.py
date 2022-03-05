@@ -1,13 +1,13 @@
-import enum
+from curses.ascii import SP  # type: ignore
 import numpy as np
 import pyglet
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
+from game.game_utils import TileStatus, SpaceStatus
+import game.game_actions
+
 
 COLORS = ["Pink", "Purple", "Indigo", "Blue", "Aqua", "Green"]
 pyglet.resource.path = ["../../resources"]
 pyglet.resource.reindex()
-
 
 # Load all block and gem images into a matrix of images 2 x 6 in size
 class GameAssets:
@@ -19,9 +19,18 @@ class GameAssets:
             # Build File Names
             block_file_name = f"Block_{COLORS[color_idx]}.png"
             gem_file_name = f"Gem_{COLORS[color_idx]}.png"
+            # Inject into resources
+            block = pyglet.resource.image(block_file_name)
+            gem = pyglet.resource.image(gem_file_name)
+            # Set anchor to bottom center so that it's easy to align tiles to game board later
+            block.anchor_x = block.width / 2
+            gem.anchor_x = gem.width / 2
+            # Save Filename, convenient for unit testing
+            block.color = COLORS[color_idx]
+            gem.color = COLORS[color_idx]
             # Populate Lists
-            self.block_list.append(pyglet.resource.image(block_file_name))
-            self.gem_list.append(pyglet.resource.image(gem_file_name))
+            self.block_list.append(block)
+            self.gem_list.append(gem)
         return
 
 
@@ -39,6 +48,7 @@ class BoardSpace(pyglet.shapes.Polygon):
         color: tuple[int],
         batch: pyglet.graphics.Batch,
         visible: bool = False,
+        space_status: SpaceStatus = SpaceStatus.Free,
     ):
         # Use that to define left, right, top, coordinates, see GameBoardMath.png
         left = [bottom[0] - width_divisons, bottom[1] + height_divisons]
@@ -54,22 +64,16 @@ class BoardSpace(pyglet.shapes.Polygon):
         self.width_divisions = width_divisons
         self.height_divisions = height_divisons
 
-        # Is space selected
-        self.space_selected = False
+        # Board spaces start out unoccupied
+        self.space_status = space_status
 
     def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
-        # Is mouse dragging over space?
-        # Use Shapely to determine if polygon contains the point
-
-        point = Point(x, y)
-        polygon = Polygon(self.vertex_list)
-        if polygon.contains(point):
-            self.space_selected = True
-        else:
-            self.space_selected = False
-
-    def on_mouse_release(self, x, y, button, modifiers):
-        self.space_selected = False
+        """
+        On mouse drag, determine if a space is actively selected
+        """
+        self.space_status = game.game_actions.is_board_space_selected(
+            x, y, self.vertex_list, self.space_status  # type: ignore
+        )
 
 
 class GameBoard:
@@ -79,17 +83,20 @@ class GameBoard:
 
     def __init__(
         self,
-        game_window: pyglet.window = pyglet.window.Window(800, 600),
-        player_hand_sprites: list["pyglet.sprite.Sprite"] = [],
+        game_window: pyglet.window.Window = pyglet.window.Window(800, 600),
+        player_hand: list = [],
         batch: pyglet.graphics.Batch = pyglet.graphics.Batch(),
         color: tuple = (9, 4, 10),
         tiles_per_row: int = 6,
     ):
         self.game_window = game_window
         self.batch = batch
-        self.player_hand_sprites = player_hand_sprites
+        self.player_hand = player_hand
         self.color = color
         self.tiles_per_row = tiles_per_row
+        self.board_spaces: np.ndarray = np.empty(
+            (self.tiles_per_row, self.tiles_per_row), dtype=object
+        )  # No board spaced until drawn
 
     def add_game_board_sprite(self, board_scale: float = 2):
         """
@@ -107,15 +114,15 @@ class GameBoard:
             x=self.game_window.width / 2,
             y=self.game_window.height / 2,
             batch=self.batch,
+            group=pyglet.graphics.OrderedGroup(0),
         )
         self.game_board_sprite.scale = board_scale
 
-    # TODO: Maybe combine this and above function into a "gameboard class" and make this class a "game" class
     def define_board_spaces(self):
         # Game board is made up of n x n spaces that we'll treat as a cartesion plane
         # Space coord of Bottom-est space is 0, 0
         # Space coord of right-est space is 0, n
-        # Space coord left-ist space is n, 0
+        # Space coord or left-ist space is n, 0
 
         # height, width, and center point of gameboard
         h = self.game_board_sprite.height
@@ -128,23 +135,24 @@ class GameBoard:
 
         # Divide the board into 2 n divisions to define spaces tiles can go on isometric board
         # see GameBoardMath.png
-        s_w = w / (2 * self.tiles_per_row)
-        s_h = h / (2 * self.tiles_per_row)
+        s_w = round(w / (2 * self.tiles_per_row))
+        s_h = round(h / (2 * self.tiles_per_row))
 
         # start at 0,0
         # Loop through each square on the board
-        self.board_spaces = np.empty((6, 6), dtype=object)
-        for y_space_coord in range(6):
-            self.color = (self.color[0] + 1, self.color[1], self.color[2])
-            for x_space_coord in range(6):
+        for y_space_coord in range(self.tiles_per_row):
+            # Define a color for debugging convencience
+            # self.color = (self.color[0] + 1, self.color[1], self.color[2])
+            for x_space_coord in range(self.tiles_per_row):
                 # Place bottom coordinate depending on which space were on
-                x_space_coord = 0
-                y_space_coord = 0
                 s_b = [
                     board_bottom_coord[0] + s_w * (x_space_coord + y_space_coord * -1),
                     board_bottom_coord[1] + s_h * (y_space_coord + x_space_coord),
                 ]
-                self.color = (self.color[0] + 1, self.color[1], self.color[2] + 1)
+                # Define a color for debugging convencience
+                # self.color = (self.color[0] + 1, self.color[1], self.color[2] + 1)
+
+                # Create board space as interactable object
                 self.board_spaces[x_space_coord, y_space_coord] = BoardSpace(
                     s_b, s_w, s_h, color=self.color, batch=self.batch, visible=False
                 )
@@ -153,17 +161,43 @@ class GameBoard:
         """
         Returns a list of all sprites on the board right now
         """
-        return [self.game_board_sprite] + self.player_hand_sprites
+        return [self.game_board_sprite] + self.player_hand
 
     def add_event_handlers(self):
         """
         Add player hand sprites, board spaces, to event handlers
         """
-        for tile in self.player_hand_sprites:
+        self.game_window.push_handlers(self)
+        for tile in self.player_hand:
             self.game_window.push_handlers(tile)
         for col in self.board_spaces:
             for space in col:
                 self.game_window.push_handlers(space)
+
+    def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
+        """
+        Checks if player is dragging tile over board space and then snaps tile to spaces
+        """
+        game.game_actions.snap_tile_to_board_space(self.player_hand, self.board_spaces)
+
+    def on_mouse_release(self, x, y, button, modifier):
+        """
+        When you let go of the mouse, the tiles should no longer be active
+        """
+        # TODO: Assign ordered group numbers somehowwww???
+        draw_group = None
+        spaces_selected = 0
+        for idx, spaces_row in enumerate(self.board_spaces):
+            for jdx, space in enumerate(spaces_row):
+                if space.space_status == SpaceStatus.Selected:
+                    draw_group = 48 - (idx + jdx + 2)*2
+                    spaces_selected += 1
+        if spaces_selected > 1:
+            raise Exception("More than one selected board space space was found")
+
+        for tile in self.player_hand:
+            if tile.active:
+                game.game_actions.deactivate_tiles(tile, draw_group)
 
     def update(self, dt):
         """
@@ -172,12 +206,6 @@ class GameBoard:
         objs = self.get_game_objects()
         for obj in objs:
             obj.update()
-
-
-class TileStatus(enum.Enum):
-    Bag = 0
-    Hand = 1
-    Board = 2
 
 
 class GamePiece:
@@ -189,11 +217,13 @@ class GamePiece:
 
     def __init__(
         self,
-        gem: pyglet.resource.image,
-        block: pyglet.resource.image,
+        gem: pyglet.image.TextureRegion,
+        block: pyglet.image.TextureRegion,
         tile_status: TileStatus,
     ):
         self.gem = gem
+        self.gem_color = gem.color  # type: ignore
+        self.block_color = block.color  # type: ignore
         self.block = block
         self.tile_status = tile_status
 
@@ -208,33 +238,29 @@ class GamePieceSprite(pyglet.sprite.Sprite):
     def __init__(
         self,
         game_piece_info: GamePiece,
-        batch: pyglet.graphics.Batch(),
+        batch: pyglet.graphics.Batch,
         active: bool = False,
     ):
-        self.block = pyglet.sprite.Sprite(game_piece_info.block, batch=batch)
-        self.gem = pyglet.sprite.Sprite(game_piece_info.gem, batch=batch)
-        self.tile_status = game_piece_info.tile_status
-        self.active = active
+        self.block = pyglet.sprite.Sprite(
+            game_piece_info.block, batch=batch, group=pyglet.graphics.OrderedGroup(49)
+        )
+        self.block_color_str = game_piece_info.block_color
+        self.gem = pyglet.sprite.Sprite(
+            game_piece_info.gem, batch=batch, group=pyglet.graphics.OrderedGroup(50)
+        )
+        self.gem_color_str = game_piece_info.gem_color
+
+        # Tile status
+        self.active = active  # Is player holding tile right now
+        self.tile_status = game_piece_info.tile_status  # Is tile in bag, hand, or board
+
         super().__init__(pyglet.resource.image("None.png"), batch=batch)
 
     def on_mouse_press(self, x, y, button, modifier):
-        # Get coordinates bounding the sprite
-        current_sprite_x_bounds = (
-            self.x,
-            self.x + self.block.width,
-        )  # have to use block width bc parent sprite is 1x1
-        current_sprite_y_bounds = (self.y, self.y + self.block.height)
-        # Did the mouse click the sprite?
-        self.active = (
-            current_sprite_x_bounds[0] < x < current_sprite_x_bounds[1]
-        ) and (current_sprite_y_bounds[0] < y < current_sprite_y_bounds[1])
-        if self.active:
-            self.update(scale=self.scale * 2)
-
-    def on_mouse_release(self, x, y, button, modifier):
-        if self.active:
-            self.active = False
-            self.update(scale=self.scale / 2)
+        """
+        If a Tile gets clicked, define it as active
+        """
+        game.game_actions.click_tile_make_active(x, y, self)
 
     def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
         """
@@ -244,6 +270,7 @@ class GamePieceSprite(pyglet.sprite.Sprite):
         if self.active:
             self.update(x=self.x + dx, y=y + dy)
 
+    # TODO: Move this to game actions
     def update(
         self, x=None, y=None, rotation=None, scale=None, scale_x=None, scale_y=None
     ):
@@ -251,19 +278,15 @@ class GamePieceSprite(pyglet.sprite.Sprite):
         In addition to updating any parameters we want to update, also force gem and block sprites to move together
         adapted from pyglet.sprite.Sprite()
         """
-        for sprite in [self, self.gem, self.block]:
-            if y is not None:
-                sprite.y = y
-            if x is not None:
-                sprite.x = x
-            if rotation is not None:
-                sprite.rotation = rotation
-            if scale is not None:
-                sprite.scale = scale
-            if scale_x is not None:
-                sprite.scale_x = scale_x
-            if scale_y is not None:
-                sprite.scale_y = scale_y
+        game.game_actions.update_game_piece(
+            game_piece=self,
+            x=x,
+            y=y,
+            rotation=rotation,
+            scale=scale,
+            scale_x=scale_x,
+            scale_y=scale_y,
+        )
 
 
 class PlayerHand:
@@ -290,22 +313,22 @@ class PlayerHand:
         hand_y = 25  # hand's distance from bottom of window
 
         # Put all resources for hand in a batch of sprites
-        game_board.player_hand_sprites = []
+        game_board.player_hand = []
         for idx, tile in enumerate(self.player_hand):
             # X position and Y position of each tile, 2 x 3
             x = (idx % 3 * self.spacer) + hand_x
             y = (idx % 2 * self.spacer) + hand_y
             # Place block and gem for one tile in two sprites with some coordinates
             game_piece_sprite = GamePieceSprite(
-                tile, batch=game_board.batch, active=True
+                tile, batch=game_board.batch, active=False
             )
             # Scale accordingly
             game_piece_sprite.update(x=x, y=y, scale=self.hand_scale)
 
             # Update Gamepiece status
-            tile.status = TileStatus.Hand
+            tile.tile_status = TileStatus.Hand
             # Add both block and gem to sprite batch
-            game_board.player_hand_sprites.append(game_piece_sprite)
+            game_board.player_hand.append(game_piece_sprite)
         return game_board
 
 
@@ -316,7 +339,6 @@ class TilePool(GameAssets):
 
     def __init__(
         self,
-        game_board: GameBoard,
         no_sets: int = 3,
     ):
         # Game Pieces contains assets
@@ -340,16 +362,17 @@ class TilePool(GameAssets):
                     )
         return
 
-    def pull_new_hand(
-        self, player_hand: PlayerHand = PlayerHand()
-    ) -> list["GamePiece"]:
+    def pull_new_hand(self, player_hand: PlayerHand = PlayerHand()) -> PlayerHand:
         """
         Draw an initial hand
         """
         # Select six random tiles
-        player_hand.player_hand = np.random.choice(
-            self.tiles, player_hand.hand_size, replace=False
+        player_hand.player_hand = list(
+            np.random.choice(self.tiles, player_hand.hand_size, replace=False)
         )
-        # Remove those tiles from the pool
-        [self.tiles.remove(tile) for tile in player_hand.player_hand]
+        # Remove those tiles from the bag & place in hand
+        for tile in player_hand.player_hand:
+            self.tiles.remove(tile)
+            tile.tile_status = TileStatus.Hand
+
         return player_hand

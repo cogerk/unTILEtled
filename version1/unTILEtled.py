@@ -1,5 +1,4 @@
 import pyglet
-from pyglet.window import mouse
 import game.game_setup
 
 ### Define resources directory ###
@@ -8,18 +7,17 @@ pyglet.resource.reindex()
 
 ### Define Scaling Style as Neartest Neighbors ###
 # MUST BE FIRST to work
-pyglet.font.base.Font.texture_min_filter = pyglet.gl.GL_NEAREST
-pyglet.font.base.Font.texture_mag_filter = pyglet.gl.GL_NEAREST
+pyglet.font.base.Font.texture_min_filter = pyglet.gl.GL_NEAREST  # type: ignore
+pyglet.font.base.Font.texture_mag_filter = pyglet.gl.GL_NEAREST  # type: ignore
 pyglet.image.Texture.default_min_filter = pyglet.gl.GL_NEAREST
 pyglet.image.Texture.default_mag_filter = pyglet.gl.GL_NEAREST
-# TODO: Sprite class that knows if
+
 # TODO: Make this its own class if necessary
 ### Initialize game ###
 game_board = game.game_setup.GameBoard()
-game_tiles = game.game_setup.TilePool(game_board)
+game_tiles = game.game_setup.TilePool()
 
 ## Add Gameboard ##
-
 game_board.add_game_board_sprite()
 game_board.define_board_spaces()
 
@@ -51,13 +49,14 @@ title = pyglet.text.Label(
 your_hand_text = pyglet.text.Label(
     text="Your Hand:",
     font_name="Bauhaus 93",
-    y=game_board.player_hand_sprites[3].y + 50 * player_hand.hand_scale,
-    x=game_board.player_hand_sprites[3].x,
+    y=game_board.player_hand[3].y + 50 * player_hand.hand_scale,
+    x=game_board.player_hand[3].x,
     anchor_x="right",
     anchor_y="baseline",
     font_size=24,
 )
 
+import time
 
 ### Draw it ###
 @game_board.game_window.event
@@ -77,5 +76,5 @@ game_board.add_event_handlers()
 
 ### Run it ###
 if __name__ == "__main__":
-    pyglet.clock.schedule_interval(game_board.update, 1 / 120.0)
+    pyglet.clock.schedule_interval(game_board.update, 1 / 60)
     pyglet.app.run()
