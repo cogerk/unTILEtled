@@ -65,26 +65,31 @@ class BoardSpace(pyglet.shapes.Polygon):
 
     def __init__(
         self,
-        bottom: list[int],
-        width_divisons: int,
-        height_divisons: int,
-        color: tuple[int],
+        coordinates: game.game_actions.BoardSpaceGenerator,
         batch: pyglet.graphics.Batch,
+        color: tuple[int, int, int] = (9, 4, 10),  # usually just for debug
         visible: bool = False,
         space_status: SpaceStatus = SpaceStatus.Free,
     ):
         # Use that to define left, right, top, coordinates, see GameBoardMath.png
-        left = [bottom[0] - width_divisons, bottom[1] + height_divisons]
-        right = [bottom[0] + width_divisons, bottom[1] + height_divisons]
-        top = [bottom[0], bottom[1] + 2 * height_divisons]
+        bottom = coordinates.bottom_coord
+        width_divisions = coordinates.width_divider
+        height_divisons = coordinates.height_divider
 
-        super().__init__(bottom, left, top, right, color=color, batch=batch)
+        left = [bottom.x - width_divisions, bottom.y + height_divisons]
+        right = [bottom.x + width_divisions, bottom.y + height_divisons]
+        top = [bottom.x, bottom.y + 2 * height_divisons]
+
+        super().__init__(
+            [bottom.x, bottom.y], left, top, right, color=color, batch=batch
+        )
+
         # TODO: Is this intended behavoir?
         self.visible = visible  # set visibility of space (probably False because shapes get drawn over sprites)
 
         # Params for mouse over event
-        self.vertex_list = [tuple(x) for x in [bottom, left, top, right]]
-        self.width_divisions = width_divisons
+        self.vertex_list = [tuple(x) for x in [[bottom.x, bottom.y], left, top, right]]
+        self.width_divisions = width_divisions
         self.height_divisions = height_divisons
 
         # Board spaces start out unoccupied
@@ -99,86 +104,53 @@ class BoardSpace(pyglet.shapes.Polygon):
         )
 
 
-# class GameBoard:
-#     """
-#     Describes window and sprites in that window
-#     """
+class GameBoard:
+    """
+    Describes the gameboard
+    """
 
-#     def __init__(
-#         self,
-#         game_window: pyglet.window.Window = pyglet.window.Window(800, 600),
-#         player_hand: list = [],
-#         batch: pyglet.graphics.Batch = pyglet.graphics.Batch(),
-#         color: tuple = (9, 4, 10),
-#         tiles_per_row: int = 6,
-#     ):
-#         self.game_window = game_window
-#         self.batch = batch
-#         self.player_hand = player_hand
-#         self.color = color
-#         self.tiles_per_row = tiles_per_row
-#         self.board_spaces: np.ndarray = np.empty(
-#             (self.tiles_per_row, self.tiles_per_row), dtype=object
-#         )  # No board spaced until drawn
+    def __init__(
+        self,
+        game_window: pyglet.window.Window,
+        batch: pyglet.graphics.Batch = pyglet.graphics.Batch(),
+        tiles_per_row: int = 6,
+        board_scale: float = 2,
+        color: tuple = (9, 4, 10),  # just for debug usually
+    ):
+        # Init attributes
+        self.game_window = game_window
+        self.batch = batch
+        self.tiles_per_row = tiles_per_row
+        self.board_scale = board_scale
+        self.color = color  # just for debug usually
 
-#     def add_game_board_sprite(self, board_scale: float = 2):
-#         """
-#         Adds Game Board sprite to window
-#         """
-#         # Get Game Board Img
-#         game_board_img = pyglet.resource.image("GameBoard.png")
-#         # Place Anchor at image center
-#         game_board_img.anchor_x = game_board_img.width / 2
-#         game_board_img.anchor_y = game_board_img.height / 2
+        # Create game board sprite
+        self.game_board_sprite = game.game_actions.create_game_board_sprite(
+            x=self.game_window.width / 2,
+            y=self.game_window.height / 2,
+            batch=self.batch,
+            board_scale=self.board_scale,
+        )
 
-#         # Put in Sprite
-#         self.game_board_sprite = pyglet.sprite.Sprite(
-#             game_board_img,
-#             x=self.game_window.width / 2,
-#             y=self.game_window.height / 2,
-#             batch=self.batch,
-#             group=pyglet.graphics.OrderedGroup(0),
-#         )
-#         self.game_board_sprite.scale = board_scale
+        # Game board is made up of n x n spaces that we'll treat as a cartesion plane
+        # Bottom-est space is 0, 0, right-est space is 0, n, left-ist space is n, 0
+        board_space_coordinates = game.game_actions.create_game_board_spaces(
+            h=self.game_board_sprite.height,
+            w=self.game_board_sprite.width,
+            x_center=self.game_board_sprite.x,
+            y_center=self.game_board_sprite.y,
+            n=tiles_per_row,
+            color=color,
+        )
 
-#     def define_board_spaces(self):
-#         # Game board is made up of n x n spaces that we'll treat as a cartesion plane
-#         # Space coord of Bottom-est space is 0, 0
-#         # Space coord of right-est space is 0, n
-#         # Space coord or left-ist space is n, 0
+        # Using that information, draw spaces and add to the board
+        self.board_spaces = np.empty([tiles_per_row, tiles_per_row], dtype=BoardSpace)
+        for x in range(tiles_per_row):
+            for y in range(tiles_per_row):
+                self.board_spaces[x, y] = BoardSpace(
+                    board_space_coordinates[x, y], batch=self.batch
+                )
 
-#         # height, width, and center point of gameboard
-#         h = self.game_board_sprite.height
-#         w = self.game_board_sprite.width
-#         x_center = self.game_board_sprite.x
-#         y_center = self.game_board_sprite.y
-
-#         # Bounds of game board
-#         board_bottom_coord = [x_center, y_center - h / 2]
-
-#         # Divide the board into 2 n divisions to define spaces tiles can go on isometric board
-#         # see GameBoardMath.png
-#         s_w = round(w / (2 * self.tiles_per_row))
-#         s_h = round(h / (2 * self.tiles_per_row))
-
-#         # start at 0,0
-#         # Loop through each square on the board
-#         for y_space_coord in range(self.tiles_per_row):
-#             # Define a color for debugging convencience
-#             # self.color = (self.color[0] + 1, self.color[1], self.color[2])
-#             for x_space_coord in range(self.tiles_per_row):
-#                 # Place bottom coordinate depending on which space were on
-#                 s_b = [
-#                     board_bottom_coord[0] + s_w * (x_space_coord + y_space_coord * -1),
-#                     board_bottom_coord[1] + s_h * (y_space_coord + x_space_coord),
-#                 ]
-#                 # Define a color for debugging convencience
-#                 # self.color = (self.color[0] + 1, self.color[1], self.color[2] + 1)
-
-#                 # Create board space as interactable object
-#                 self.board_spaces[x_space_coord, y_space_coord] = BoardSpace(
-#                     s_b, s_w, s_h, color=self.color, batch=self.batch, visible=False
-#             )
 
 # def get_game_objects(self):
 #     """
@@ -224,77 +196,83 @@ class GamePieceSprite(pyglet.sprite.Sprite):
         self,
         game_piece_info: GamePiece,
         draw_batch: pyglet.graphics.Batch,
-        active: bool = False,
+        hand_scale: float = 1,
+        board_scale: float = 2,
     ):
+        # Create block and gem sprites and record their color
         self.block = pyglet.sprite.Sprite(
             game_piece_info.block,
             batch=draw_batch,
             group=pyglet.graphics.OrderedGroup(49),
         )
-        self.block_color_str = game_piece_info.block_color
+        self.block_color = game_piece_info.block_color
         self.gem = pyglet.sprite.Sprite(
             game_piece_info.gem,
             batch=draw_batch,
             group=pyglet.graphics.OrderedGroup(50),
         )
-        self.gem_color_str = game_piece_info.gem_color
+        self.gem_color = game_piece_info.gem_color
 
-        # Tile status
-        self.active = active  # Is player holding tile right now
-        self.tile_status = game_piece_info.tile_status  # Is tile in bag, hand, or board
+        # Tile status: Is tile in bag, hand, or board
+        self.tile_status = game_piece_info.tile_status
+        self.hand_scale = hand_scale
+        self.board_scale = board_scale
 
         super().__init__(pyglet.resource.image("None.png"), batch=draw_batch)
 
-    def outline_tile(self, draw_batch):
+    def outline_tile(self, draw_batch: pyglet.graphics.Batch):
+        """
+        Draw outlines around selected tiles and related tiles
+
+        Args:
+            draw_batch (pyglet.graphics.Batch): batch of sprites to put outlines in
+        """
+
+        # Get outline resources
         outlines = Outlines()
-        group = self.gem.group.order + 1
+
+        # Draw outlines in same group as the gem
+        group = self.gem.group
+
+        # Draw an active outline around selected tiles
         if self.tile_status == TileStatus.Selected:
             self.outline = pyglet.sprite.Sprite(
                 img=outlines.active_outline,
                 x=self.block.x,
                 y=self.block.y + self.block.height / 2,
                 batch=draw_batch,
-                group=pyglet.graphics.OrderedGroup(group),
+                group=group,
             )
+
+        # Draw an outline around potential pairs to indicate "this is an option too"
         elif self.tile_status == TileStatus.PotentialSelection:
             self.outline = pyglet.sprite.Sprite(
                 img=outlines.option_outline,
                 x=self.block.x,
                 y=self.block.y + self.block.height / 2,
                 batch=draw_batch,
-                group=pyglet.graphics.OrderedGroup(group),
+                group=group,
             )
+
+        # For all other tile statuses, delete their outline
         else:
             if hasattr(self, "outline"):
                 self.outline.delete()
                 delattr(self, "outline")
-            Warning(
-                f"cannout use outline_tile() when status is '{self.tile_status.name}'"
-            )
-
-    def remove_outline(self):
-        self.outline.delete()
-
-    def on_mouse_press(self, x, y, button, modifier):
-        """
-        If a Tile gets clicked, define it as active
-        """
-        game.game_actions.click_tile_make_active(x, y, self)
 
     def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
         """
         Click and Drag tiles around weeee
         """
-        # Only drag if sprite is active
-        if self.active:
-            self.update(x=self.x + dx, y=y + dy)
+        # Only drag if tiles is selected
+        if self.tile_status == TileStatus.Selected:
+            self.update(x=self.x + dx, y=y + dy, scale=self.board_scale)
 
-    # TODO: Move this to game actions
     def update(
         self, x=None, y=None, rotation=None, scale=None, scale_x=None, scale_y=None
     ):
         """
-        In addition to updating any parameters we want to update, also force gem and block sprites to move together
+        In addition to updating any parameters we want to update, also force gem, block, and outline sprites to move together
         adapted from pyglet.sprite.Sprite()
         """
         game.game_actions.update_game_piece(
@@ -390,7 +368,8 @@ class PlayerHand:
             y = (idx % 2 * self.spacer) + hand_y
             # Place block and gem for one tile in two sprites with some coordinates
             game_piece_sprite = GamePieceSprite(
-                tile, draw_batch=draw_batch, active=False
+                tile,
+                draw_batch=draw_batch,
             )
             # Scale accordingly
             game_piece_sprite.update(x=x, y=y, scale=self.hand_scale)
@@ -408,15 +387,20 @@ class PlayerHand:
         return self.player_hand[key]
 
     def on_mouse_press(self, x, y, button, modifiers):
-        # Get selected tile
-        for tile in self.player_hand:
+        for tile in self:
+            # Reset Tiles
+            tile.tile_status = TileStatus.Hand
+        for tile in self:
             if game.game_actions.was_tile_clicked(x, y, tile):
-                tile.tile_status = TileStatus.Selected
-            else:
-                tile.tile_status = TileStatus.Hand
+                # Highlight Clicked tile and other potential tiles
+                game.game_actions.find_shared_feature_tiles(tile, self.player_hand)
+        for tile in self:
+            tile.outline_tile(self.draw_batch)
 
     def on_mouse_release(self, x, y, button, modifiers):
-        for tile in self.player_hand:
+        for tile in self:
+            tile.TileStatus = TileStatus.Hand
+            tile.update(scale=self.hand_scale)
             tile.outline_tile(self.draw_batch)
 
 
@@ -429,13 +413,18 @@ class Game:
         game_window: pyglet.window.Window = pyglet.window.Window(800, 600),
         draw_batch: pyglet.graphics.Batch = pyglet.graphics.Batch(),
         game_scale: float = 1,
-        # game_board: GameBoard = GameBoard(),
     ):
         self.draw_batch = draw_batch
         self.board_size = board_size
         self.game_window = game_window
         self.game_scale = game_scale
         self.tile_pool = TilePool(no_sets)
+        self.game_board = GameBoard(
+            game_window=game_window,
+            batch=draw_batch,
+            tiles_per_row=board_size,
+            board_scale=game_scale * 2,
+        )
         self.player_hand = PlayerHand(
             hand_size, game_scale, self.tile_pool, game_window, draw_batch
         )

@@ -5,7 +5,7 @@ from pathlib import Path
 import game.game_setup
 import game.game_actions
 from game.game_utils import TileStatus, SpaceStatus
-from game.game.game_actions import deactivate_tiles
+from game.game_actions import deactivate_tiles
 
 # Find and Set Resources path relative to module (necessary for running tests in VSC)
 module_dir = Path(game.__file__)  # type: ignore
@@ -21,21 +21,7 @@ class TestGameActions(unittest.TestCase):
 
     def setUp(self):
         ### Initialize game ###
-        self.game_board = game.game_setup.GameBoard()
-        self.game_tiles = game.game_setup.TilePool()
-
-        ### Place Gameboard ###
-        self.game_board.add_game_board_sprite()
-        self.game_board.define_board_spaces()
-
-        ### Initialize Hand ###
-        self.player_hand = game.game_setup.PlayerHand()
-        self.player_hand = self.game_tiles.pull_new_hand(
-            self.player_hand
-        )  # Draw hand from the available game_tiles
-        self.game_board = self.player_hand.build_hand_tiles_sprites(
-            self.game_board
-        )  # Build the hand's sprites on the game board
+        self.game = game.game_setup.Game()
 
     def test_board_space_selected(self):
         # Test when mouse inside board space, space is selected

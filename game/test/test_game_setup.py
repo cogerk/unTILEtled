@@ -5,11 +5,13 @@ import __main__
 from pathlib import Path
 import game
 import game.game_setup
+import game.game_utils
 
 
 # Find and Set Resources path relative to module (necessary for running tests in VSC)
 module_dir = Path(game.__file__)
-repo_dir = str(module_dir.parent.absolute().parent.absolute().parent.absolute())
+repo_dir = str(module_dir.parent.absolute().parent.absolute())
+
 pyglet.resource.path = [f"{repo_dir}/resources"]
 pyglet.resource.reindex()
 
@@ -24,12 +26,8 @@ class TestAssets(unittest.TestCase):
         Get a hand and game tiles
         """
         ### Initialize game ###
-        self.game_board = game.game_setup.GameBoard()
-        self.game_tiles = game.game_setup.TilePool()
-
-        ## Add Gameboard ##
-        self.game_board.add_game_board_sprite()
-        self.game_board.define_board_spaces()
+        self.game = game.game_setup.Game()
+        self.game_assets = game.game_setup.GameAssets()
 
     def test_detect_resources(self):
         """
@@ -43,8 +41,12 @@ class TestAssets(unittest.TestCase):
         Test that example png is in resources directory and there are at least 2 *
         colors assets in the resources folder
         """
-        self.assertEqual(len(self.game_tiles.gem_list), len(game.game_setup.COLORS))
-        self.assertEqual(len(self.game_tiles.block_list), len(game.game_setup.COLORS))
+        self.assertEqual(
+            len(self.game_assets.gem_list), len(game.game_utils.TileColors)
+        )
+        self.assertEqual(
+            len(self.game_assets.block_list), len(game.game_utils.TileColors)
+        )
 
     def test_no_of_assets(self):
         """
