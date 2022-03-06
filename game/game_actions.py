@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 
 if TYPE_CHECKING:
-    import game.game_setup
+    import game_setup
     import numpy as np
 
 import pyglet
@@ -43,7 +43,7 @@ def is_board_space_selected(
 
 
 def snap_tile_to_board_space(
-    player_hand: list[game.game_setup.GamePieceSprite],
+    player_hand: list[game_setup.GamePieceSprite],
     board_spaces: np.ndarray,
 ):
     """_summary_
@@ -62,8 +62,9 @@ def snap_tile_to_board_space(
                     current_space = board_spaces[x_space_coord][y_space_coord]
                     # Snap to actively selected space
                     if current_space.space_status == SpaceStatus.Selected:
-                        draw_group = 48 - (y_space_coord + x_space_coord + 2) * 2
-                        tile.block.group = pyglet.graphics.OrderedGroup(draw_group)
+                        draw_group = 40 - (y_space_coord + x_space_coord + 2) * 2
+                        tile.block.group = pyglet.graphics.OrderedGroup(draw_group - 1)
+                        tile.gem.group = pyglet.graphics.OrderedGroup(draw_group)
                         # Align tile to bottom corner so it snaps to board space
                         tile.update(
                             x=current_space.vertex_list[0][0],
@@ -72,8 +73,21 @@ def snap_tile_to_board_space(
                         tile.tile_status = TileStatus.BoardThinking
 
 
+def was_tile_clicked(mouse_x: int, mouse_y: int, tile: game_setup.GamePieceSprite):
+    current_sprite_x_bounds = (
+        tile.x - tile.block.width / 2,
+        tile.x + tile.block.width / 2,
+    )  # have to use block width bc parent sprite is 1x1
+    current_sprite_y_bounds = (tile.y, tile.y + tile.block.height)
+    # Did the mouse click the sprite?
+    tile_was_clicked = (
+        current_sprite_x_bounds[0] < mouse_x < current_sprite_x_bounds[1]
+    ) and (current_sprite_y_bounds[0] < mouse_y < current_sprite_y_bounds[1])
+    return tile_was_clicked
+
+
 def click_tile_make_active(
-    mouse_x: int, mouse_y: int, game_piece: game.game_setup.GamePieceSprite
+    mouse_x: int, mouse_y: int, game_piece: game_setup.GamePieceSprite
 ):
     """
     If a tile from hand is clicked, it becomes active
@@ -86,40 +100,32 @@ def click_tile_make_active(
     # Only react if Tile is in hand
     if game_piece.tile_status == TileStatus.Hand:
         # Get coordinates bounding the sprite
-        current_sprite_x_bounds = (
-            game_piece.x - game_piece.block.width / 2,
-            game_piece.x + game_piece.block.width / 2,
-        )  # have to use block width bc parent sprite is 1x1
-        current_sprite_y_bounds = (game_piece.y, game_piece.y + game_piece.block.height)
-        # Did the mouse click the sprite?
-        game_piece.active = (
-            current_sprite_x_bounds[0] < mouse_x < current_sprite_x_bounds[1]
-        ) and (current_sprite_y_bounds[0] < mouse_y < current_sprite_y_bounds[1])
 
         if game_piece.active:
             game_piece.update(scale=game_piece.scale * 2)
 
 
 # TODO Move this function to on_release for game board and then use the sum of board space indices to determine draw group
-def deactivate_tiles(
-    game_piece: game.game_setup.GamePieceSprite, draw_group: int | None
-):
+def deactivate_tiles(game_piece: game_setup.GamePieceSprite, draw_group: int | None):
+    trigger_tile_update = False
     # Once you let go of mouse, tile is no longer active
     if game_piece.active:
         game_piece.active = False
         # If tile was over a board space, it is now officially placed
         if game_piece.tile_status is TileStatus.BoardThinking:
             game_piece.tile_status = TileStatus.BoardPlaced
-            game_piece.block.group = pyglet.graphics.OrderedGroup(draw_group)
             # TODO: replace this with a function that draws new tiles and removes them from the tile pool
+            trigger_tile_update = True  # If a tile is placed we need to update the playerhand and tile pool
         # If tile isn't on a board spot, return it to scale
         else:
             game_piece.block.group = pyglet.graphics.OrderedGroup(49)
+            game_piece.gem.group = pyglet.graphics.OrderedGroup(50)
             game_piece.update(scale=game_piece.scale / 2)
+    return trigger_tile_update
 
 
 def update_game_piece(
-    game_piece: game.game_setup.GamePieceSprite,
+    game_piece: game_setup.GamePieceSprite,
     x: int | None = None,
     y: int | None = None,
     rotation: int | None = None,

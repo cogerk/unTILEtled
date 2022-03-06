@@ -5,7 +5,7 @@ from pathlib import Path
 import game.game_setup
 import game.game_actions
 from game.game_utils import TileStatus, SpaceStatus
-from version1.game.game_actions import deactivate_tiles
+from game.game.game_actions import deactivate_tiles
 
 # Find and Set Resources path relative to module (necessary for running tests in VSC)
 module_dir = Path(game.__file__)  # type: ignore
